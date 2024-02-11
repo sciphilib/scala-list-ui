@@ -1,3 +1,5 @@
+package data
+
 import scala.util.Random
 
 case class Point2D(x: Double, y: Double) {
