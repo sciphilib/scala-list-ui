@@ -15,6 +15,13 @@ import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import com.fasterxml.jackson.core.`type`.TypeReference
 import java.io.File
 
+import scala.reflect.ClassTag
+
+import data.MyList
+import data.Point2D
+import data.Point2DImplicits
+import data.Point2DImplicits.point2DOrdering
+
 object MyListApp extends JFXApp3 {
   override def start(): Unit = {
     stage = new JFXApp3.PrimaryStage {
@@ -40,7 +47,12 @@ object MyListApp extends JFXApp3 {
             maxWidth = Double.MaxValue
             promptText = "Select Data Type"
           }
-          val listView = new ListView[String]() { maxWidth = Double.MaxValue }
+          val myPoint2DList = new MyList[Point2D]()
+          val listView = new ListView[String]() {
+            items = ObservableBuffer[String]()
+            maxWidth = Double.MaxValue
+          }
+
           val addButton = new Button("Add") { maxWidth = Double.MaxValue }
           val addAtIndexButton = new Button("Add at Index") {
             maxWidth = Double.MaxValue
@@ -101,11 +113,17 @@ object MyListApp extends JFXApp3 {
               case "Point2D" =>
                 getPoint2DFromUser() match {
                   case Some((x, y)) =>
-                    listView.items.value += new Point2D(x, y).toString
+                    myPoint2DList.add(Point2D(x, y))
+                    updateListView()
                   case None =>
                 }
               case _ =>
             }
+          }
+
+          def updateListView(): Unit = {
+            listView.items.value.clear()
+            myPoint2DList.foreach(p => listView.items.value += s"Point2D(${p.x}, ${p.y})")
           }
 
           addAtIndexButton.onAction = _ => {
@@ -125,10 +143,8 @@ object MyListApp extends JFXApp3 {
                 case "Point2D" =>
                   getPoint2DFromUser() match {
                     case Some((x, y)) =>
-                      listView.items.value.insert(
-                        idx,
-                        new Point2D(x, y).toString()
-                      )
+                      myPoint2DList.addAt(idx, Point2D(x, y))
+                      updateListView()
                     case None =>
                   }
                 case _ =>
@@ -150,14 +166,22 @@ object MyListApp extends JFXApp3 {
           deleteButton.onAction = _ => {
             val selectedIndex = listView.selectionModel.value.getSelectedIndex
             if (selectedIndex >= 0) {
-              listView.items.value.remove(selectedIndex)
+              val selectedString = listView.items.value(selectedIndex)
+              parsePoint2D(selectedString) match {
+                case Some(point2D) =>
+                  myPoint2DList.delete(point2D)
+                  updateListView()
+                case None =>
+                  println("Error: Could not parse the selected item back into a Point2D object.")
+              }
             }
           }
 
           deleteAtIndexButton.onAction = _ => {
             val idx = indexField.text.value.toIntOption.getOrElse(-1)
             if (idx >= 0 && idx < listView.items.value.size) {
-              listView.items.value.remove(idx)
+              myPoint2DList.deleteAt(idx)
+              updateListView()
             }
           }
 
@@ -182,6 +206,27 @@ object MyListApp extends JFXApp3 {
                   headerText = "Data Type Not Selected"
                   contentText = "Please select a data type for sorting."
                 }.showAndWait()
+            }
+          }
+
+          def deserializeListFromJsonFile(primaryStage: scalafx.stage.Window): Unit = {
+            val fileChooser = new FileChooser {
+              title = "Open JSON File"
+              extensionFilters += new FileChooser.ExtensionFilter("JSON files (*.json)", "*.json")
+            }
+            val file = fileChooser.showOpenDialog(primaryStage)
+            if (file != null) {
+              try {
+                val mapper = new ObjectMapper() with ScalaObjectMapper
+                mapper.registerModule(DefaultScalaModule)
+                val pointsList: Seq[Point2D] = mapper.readValue(file, new TypeReference[Seq[Point2D]] {})
+                myPoint2DList.clear()
+                pointsList.foreach(myPoint2DList.add)
+                updateListView()
+              } catch {
+                case ex: Exception =>
+                  ex.printStackTrace()
+              }
             }
           }
 
@@ -211,7 +256,6 @@ object MyListApp extends JFXApp3 {
 
           deserializeButton.onAction = _ => {
             val pointsList = deserializeListFromJsonFile(stage)
-            updateUIWithPointsList(pointsList)
           }
 
         }
@@ -299,25 +343,6 @@ object MyListApp extends JFXApp3 {
         case ex: Exception => ex.printStackTrace()
       }
     }
-  }
-
-  def deserializeListFromJsonFile(primaryStage: scalafx.stage.Window): Seq[Point2D] = {
-    val fileChooser = new FileChooser {
-      title = "Open JSON File"
-      extensionFilters += new FileChooser.ExtensionFilter("JSON files (*.json)", "*.json")
-    }
-    val file = fileChooser.showOpenDialog(primaryStage)
-    if (file != null) {
-      try {
-        val mapper = new ObjectMapper() with ScalaObjectMapper
-        mapper.registerModule(DefaultScalaModule)
-        mapper.readValue(file, new TypeReference[Seq[Point2D]] {})
-      } catch {
-        case ex: Exception =>
-          ex.printStackTrace()
-          Seq.empty
-      }
-    } else Seq.empty
   }
 
 }

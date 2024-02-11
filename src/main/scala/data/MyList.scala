@@ -1,3 +1,5 @@
+package data
+
 import scala.reflect.ClassTag
 
 class Node[T](var data: T, var prev: Option[Node[T]] = None, var next: Option[Node[T]] = None)
@@ -6,6 +8,20 @@ class MyList[T] {
   var head: Option[Node[T]] = None
   var tail: Option[Node[T]] = None
   var size: Int = 0
+
+  def foreach(f: T => Unit): Unit = {
+    var current = head
+    while (current.isDefined) {
+      f(current.get.data)
+      current = current.get.next
+    }
+  }
+
+  def clear(): Unit = {
+    head = None
+    tail = None
+    size = 0
+  }
 
   def add(data: T): Unit = {
     val newNode = new Node[T](data)
